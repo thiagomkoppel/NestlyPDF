@@ -464,6 +464,92 @@ describe("PdfEditorApplication export", () => {
     expect(snapshot.canExport).toBe(true);
   });
 
+  it("reports the document dates carried in by the PDF gateway", async () => {
+    openResult = {
+      ok: true,
+      pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
+      documentDates: { creationDate: 1_700_000_000_000, modificationDate: 1_700_000_600_000 },
+    };
+
+    const snapshot = await app.openFile(file);
+
+    expect(snapshot.state.sourceDocumentDates).toEqual({
+      creationDate: 1_700_000_000_000,
+      modificationDate: 1_700_000_600_000,
+    });
+    expect(snapshot.state.documentDates).toEqual({
+      creationDate: 1_700_000_000_000,
+      modificationDate: 1_700_000_600_000,
+    });
+    expect(snapshot.state.isDirty).toBe(false);
+  });
+
+  it("exports the document dates chosen for the file", async () => {
+    const snapshot = app.setDocumentDates({
+      creationDate: 1_500_000_000_000,
+      modificationDate: 1_600_000_000_000,
+    });
+
+    expect(snapshot.state.documentDates).toEqual({
+      creationDate: 1_500_000_000_000,
+      modificationDate: 1_600_000_000_000,
+    });
+    expect(snapshot.state.isDirty).toBe(true);
+
+    await app.exportCurrentPdf({ filename: "dated.pdf" });
+
+    expect(exportRequests.at(-1)?.documentDates).toEqual({
+      creationDate: 1_500_000_000_000,
+      modificationDate: 1_600_000_000_000,
+    });
+    expect(app.snapshot().state.isDirty).toBe(false);
+  });
+
+  it("leaves export dates to the gateway until the user chooses them", async () => {
+    await app.exportCurrentPdf({ filename: "undated.pdf" });
+
+    expect(exportRequests.at(-1)?.documentDates).toEqual({});
+  });
+
+  it("rejects document dates no calendar date can represent", () => {
+    const snapshot = app.setDocumentDates({ creationDate: Number.NaN });
+
+    expect(snapshot.state.error).toMatchObject({ code: "OperationRejected" });
+    expect(snapshot.state.documentDates).toEqual({});
+  });
+
+  it("rejects document dates while no document is open", () => {
+    const closed = new PdfEditorApplication(reader, gateway, downloader, new TestIds());
+
+    const snapshot = closed.setDocumentDates({ creationDate: 1_500_000_000_000 });
+
+    expect(snapshot.state.error).toMatchObject({ code: "NoActiveDocument" });
+  });
+
+  it("forwards chosen document dates to the compression gateway", async () => {
+    const compress = vi.fn(() =>
+      Promise.resolve({ ok: true as const, bytes: new Uint8Array([1, 2]) }),
+    );
+    const compressionGateway: PdfCompressionGateway = { compress };
+    app = new PdfEditorApplication(
+      reader,
+      gateway,
+      downloader,
+      new TestIds(),
+      undefined,
+      undefined,
+      compressionGateway,
+    );
+    await app.openFile(file);
+    app.setDocumentDates({ creationDate: 1_500_000_000_000 });
+
+    await app.exportCurrentPdf({ mode: "compressed", filename: "completed.pdf" });
+
+    expect(compress).toHaveBeenCalledWith(
+      expect.objectContaining({ documentDates: { creationDate: 1_500_000_000_000 } }),
+    );
+  });
+
   it("downloads compressed final export bytes only when compression reduces the file", async () => {
     const compress = vi.fn(() =>
       Promise.resolve({ ok: true as const, bytes: new Uint8Array([1, 2]) }),

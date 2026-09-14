@@ -369,6 +369,11 @@ Show a compact document state:
 
 After export, the current revision becomes clean. Further edits become dirty again.
 
+The status region also carries the desktop-only **PDF dates** action, at its trailing edge. It is a
+document-level setting rather than an overlay tool, so it belongs beside document state and not in
+the insert toolbar. Touch layouts hide it: Quick Edit keeps only the tools needed to complete a page
+by hand.
+
 ## Dialogs
 
 Signature and Initials dialogs:
@@ -381,6 +386,11 @@ Signature and Initials dialogs:
 - Cancel.
 
 They must trap focus, support Escape, and restore focus.
+
+The PDF dates dialog offers the created and modified dates stored inside the downloaded file,
+prefilled from the open document, with a way back to the dates the file was opened with. An empty
+field means the exported PDF keeps the date the source file already carried. Dates are entered and
+shown in the viewer's own time zone.
 
 Image selection uses a local file picker and validation state. Unsupported, unreadable, oversized, and corrupted image files must show friendly errors without leaving placement mode active.
 

@@ -1157,7 +1157,7 @@ test("keeps Text and Date properties above Layers in the responsive desktop insp
     await page.getByRole("tab", { name: "Style" }).click();
     await expectPropertiesAboveLayers();
 
-    await page.getByRole("button", { name: "Date" }).click();
+    await page.getByRole("button", { name: "Date", exact: true }).click();
     await page.locator(".overlay-layer").click({
       position: { x: overlayBox.width * 0.75, y: overlayBox.height * 0.2 },
     });
@@ -1874,7 +1874,7 @@ test("places annotation overlays, reuses shared history, and exports visible sym
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(cross).toBeVisible();
 
-  await page.getByRole("button", { name: "Date" }).click();
+  await page.getByRole("button", { name: "Date", exact: true }).click();
   const dateOverlayBox = await page.locator(".overlay-layer").boundingBox();
   expect(dateOverlayBox).not.toBeNull();
   if (dateOverlayBox === null) {
@@ -2759,4 +2759,42 @@ test("guards dirty editor logo navigation before discarding the browser-memory s
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByLabel("Choose a PDF file")).toBeVisible();
   }
+});
+
+test("writes the PDF dates chosen in the status-bar tool into the downloaded file", async ({
+  page,
+}, testInfo) => {
+  const fixturePath = testInfo.outputPath("document-dates-fixture.pdf");
+  const source = await PDFDocument.create();
+  source.addPage([300, 400]);
+  source.setCreationDate(new Date(2019, 4, 6, 7, 8));
+  source.setModificationDate(new Date(2020, 5, 7, 8, 9));
+  const fixtureBytes = Buffer.from(await source.save());
+  await import("node:fs/promises").then((fs) => fs.writeFile(fixturePath, fixtureBytes));
+
+  await page.goto("/");
+  await page.getByLabel("Choose a PDF file").setInputFiles(fixturePath);
+  await expect(page.getByRole("heading", { name: "document-dates-fixture.pdf" })).toBeVisible();
+  await expect(page.getByText("Rendering PDF page...")).toBeHidden();
+
+  await page.getByRole("button", { name: "Edit PDF dates" }).click();
+  const datesDialog = page.getByRole("dialog", { name: "PDF dates" });
+  await expect(datesDialog.getByLabel("Created")).toHaveValue("2019-05-06T07:08");
+  await expect(datesDialog.getByLabel("Modified")).toHaveValue("2020-06-07T08:09");
+
+  await datesDialog.getByLabel("Created").fill("2001-02-03T04:05");
+  await datesDialog.getByLabel("Modified").fill("2002-03-04T05:06");
+  await datesDialog.getByRole("button", { name: "Apply dates" }).click();
+  await expect(datesDialog).toBeHidden();
+  await expect(page.getByText("Unsaved temporary edits")).toBeVisible();
+
+  const downloadedPath = testInfo.outputPath("document-dates-fixture-edited.pdf");
+  await downloadEditedPdf(page, "document-dates-fixture-edited.pdf", downloadedPath);
+
+  const exported = await PDFDocument.load(
+    await import("node:fs/promises").then((fs) => fs.readFile(downloadedPath)),
+    { updateMetadata: false },
+  );
+  expect(exported.getCreationDate()?.getTime()).toBe(new Date(2001, 1, 3, 4, 5).getTime());
+  expect(exported.getModificationDate()?.getTime()).toBe(new Date(2002, 2, 4, 5, 6).getTime());
 });

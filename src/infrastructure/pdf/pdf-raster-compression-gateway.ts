@@ -2,10 +2,12 @@ import { PDFDocument } from "pdf-lib";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
 import type {
+  DocumentDates,
   PdfCompressionGateway,
   PdfCompressionProgress,
   PdfCompressionResult,
 } from "../../application/editor-application";
+import { applyDocumentDates } from "./document-dates";
 
 const TARGET_DPI = 150;
 const JPEG_QUALITY = 0.82;
@@ -43,6 +45,7 @@ export class PdfRasterCompressionGateway implements PdfCompressionGateway {
     readonly bytes: Uint8Array;
     readonly onProgress?: (progress: PdfCompressionProgress) => void;
     readonly signal?: AbortSignal;
+    readonly documentDates?: DocumentDates;
   }): Promise<PdfCompressionResult> {
     let renderedDocument: PDFDocumentProxy | undefined;
     try {
@@ -112,6 +115,9 @@ export class PdfRasterCompressionGateway implements PdfCompressionGateway {
         request.onProgress?.({ currentPage: index, totalPages: renderedDocument.numPages });
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       }
+      // The rebuilt document starts with pdf-lib's own Info dictionary, so the chosen dates have
+      // to be stamped again here.
+      applyDocumentDates(compressed, request.documentDates);
       return { ok: true, bytes: await compressed.save() };
     } catch (error) {
       if (request.signal?.aborted || (error instanceof Error && /cancel/i.test(error.name))) {

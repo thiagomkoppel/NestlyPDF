@@ -102,6 +102,26 @@ describe("PdfRasterCompressionGateway", () => {
     expect(output.getPage(0).getSize()).toEqual({ width: 200, height: 100 });
   });
 
+  it("stamps the chosen document dates on the rebuilt PDF", async () => {
+    const fixture = createDocumentFixture(1);
+    pdfjsMock.getDocument.mockReturnValueOnce(fixture.loadingTask);
+    const gateway = new PdfRasterCompressionGateway();
+
+    const result = await gateway.compress({
+      bytes: new Uint8Array([37, 80, 68, 70]),
+      documentDates: {
+        creationDate: Date.parse("2001-02-03T04:05:06Z"),
+        modificationDate: Date.parse("2002-03-04T05:06:07Z"),
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const output = await PDFDocument.load(result.bytes, { updateMetadata: false });
+    expect(output.getCreationDate()?.getTime()).toBe(Date.parse("2001-02-03T04:05:06Z"));
+    expect(output.getModificationDate()?.getTime()).toBe(Date.parse("2002-03-04T05:06:07Z"));
+  });
+
   it("returns cancelled without opening the document when the signal is already aborted", async () => {
     const controller = new AbortController();
     controller.abort();

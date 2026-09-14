@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 
 import type {
+  DocumentDates,
   EditorSnapshot,
   PdfEditorApplication,
   PdfCompressionProgress,
@@ -33,6 +34,7 @@ import {
   validateSignatureImageFile,
 } from "../../application/editor-application";
 import type { SignatureBackgroundRemover } from "../../application/signature-background-remover";
+import { DocumentDatesDialog } from "../components/DocumentDatesDialog";
 import { createCanvasSignatureBackgroundRemover } from "../../infrastructure/browser/canvas-signature-background-remover";
 import type { PdfJsPageRenderer } from "../../infrastructure/pdf/pdfjs-page-renderer";
 import quickPdfMark from "../assets/brand/quickpdf-mark.svg";
@@ -160,6 +162,7 @@ type ToolbarIconName =
   | "checkmark"
   | "cross"
   | "date"
+  | "calendar-clock"
   | "zoom-out"
   | "zoom-in"
   | "fit"
@@ -324,6 +327,17 @@ const ToolbarIcon = ({ name }: { readonly name: ToolbarIconName }): React.ReactE
         <>
           <rect x="4" y="5" width="16" height="15" rx="2" />
           <path d="M8 3.5v3M16 3.5v3M4 9h16M8 13h3M8 16h5" />
+        </>,
+      );
+    case "calendar-clock":
+      return svg(
+        <>
+          <path d="M20.5 11.5V6.9a1.4 1.4 0 0 0-1.4-1.4H4.9a1.4 1.4 0 0 0-1.4 1.4v12.2a1.4 1.4 0 0 0 1.4 1.4h6.6" />
+          <path d="M3.5 9.6h17" />
+          <path d="M8 3.5v3.4" />
+          <path d="M16 3.5v3.4" />
+          <circle cx="17.4" cy="17.4" r="4.1" />
+          <path d="M17.4 15.4v2.1l1.4 1" />
         </>,
       );
     case "zoom-out":
@@ -932,6 +946,8 @@ export const EditorPage = ({
     editorFormFactor === "tablet-portrait" || editorFormFactor === "tablet-landscape";
   const isCompactEditorViewport = isPhoneQuickEditViewport || isTabletQuickEditViewport;
   const usesInspectorSheet = isCompactEditorViewport;
+  /** PDF date editing is a desktop tool: the pickers and the status bar row need pointer layouts. */
+  const isDesktopEditorViewport = editorFormFactor === "desktop";
   const [performanceProfile, setPerformanceProfile] =
     useState<EditorPerformanceProfile>("automatic");
   const effectivePerformanceProfile = resolveEditorPerformanceProfile(performanceProfile, {
@@ -992,6 +1008,7 @@ export const EditorPage = ({
       : currentPageThumbnailRange;
   const [thumbnailRowStride, setThumbnailRowStride] = useState(216);
 
+  const [isDocumentDatesDialogOpen, setIsDocumentDatesDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMode, setExportMode] = useState<PdfExportMode>("original");
@@ -4013,7 +4030,35 @@ export const EditorPage = ({
         <span className="desktop-status-copy">{`Page ${String(state.currentPageNumber)} of ${String(state.pageCount)}`}</span>
         <span className="desktop-status-copy">{`${String(Math.round(zoom * 100))}%`}</span>
         <span className="desktop-status-copy">{state.isDirty ? "Unsaved changes" : "Ready"}</span>
+        {isDesktopEditorViewport ? (
+          <button
+            type="button"
+            className="status-document-dates"
+            aria-label="Edit PDF dates"
+            aria-expanded={isDocumentDatesDialogOpen}
+            disabled={!snapshot.canExport || state.status === "exporting"}
+            onClick={() => {
+              setIsDocumentDatesDialogOpen(true);
+            }}
+          >
+            <ToolbarIcon name="calendar-clock" />
+            <span>PDF dates</span>
+          </button>
+        ) : null}
       </footer>
+      {isDesktopEditorViewport && isDocumentDatesDialogOpen ? (
+        <DocumentDatesDialog
+          documentDates={state.documentDates}
+          sourceDocumentDates={state.sourceDocumentDates}
+          onCancel={() => {
+            setIsDocumentDatesDialogOpen(false);
+          }}
+          onApply={(dates: DocumentDates) => {
+            applySnapshot(editor.setDocumentDates(dates));
+            setIsDocumentDatesDialogOpen(false);
+          }}
+        />
+      ) : null}
       {usesInspectorSheet ? elementInspector : null}
       {isExportDialogOpen ? (
         <ExportPdfDialog
