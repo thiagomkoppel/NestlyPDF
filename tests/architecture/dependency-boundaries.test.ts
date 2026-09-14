@@ -47,6 +47,18 @@ describe("source dependency boundaries", () => {
       .map((file) => `${file.path} imports a PDF library outside PDF infrastructure`);
     expect(violations).toEqual([]);
   });
+  it("isolates document-conversion libraries to the import infrastructure", () => {
+    const conversionLibraries = ["docx-preview", "html2canvas"];
+    const violations = readProjectFiles("src", [".ts", ".tsx"])
+      .filter((file) => !isTestFile(file.path))
+      .flatMap((file) =>
+        conversionLibraries
+          .filter((library) => file.contents.includes(`"${library}"`))
+          .filter(() => !normalizePath(file.path).includes("src/infrastructure/import/"))
+          .map((library) => `${file.path} references ${library} outside import infrastructure`),
+      );
+    expect(violations).toEqual([]);
+  });
   it("isolates service-worker browser APIs to PWA infrastructure", () => {
     const violations = readProjectFiles("src", [".ts", ".tsx"])
       .filter((file) => file.contents.includes("navigator.serviceWorker"))

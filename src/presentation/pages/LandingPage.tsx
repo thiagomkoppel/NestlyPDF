@@ -29,6 +29,7 @@ interface LandingPageProps {
   readonly onDocumentOpened: () => void;
   readonly replacementFile?: File;
   readonly onReplacementFileConsumed?: () => void;
+  readonly minimumOpeningDurationMs?: number;
 }
 
 const sleep = (duration: number): Promise<void> =>
@@ -41,6 +42,7 @@ export const LandingPage = ({
   onDocumentOpened,
   replacementFile,
   onReplacementFileConsumed,
+  minimumOpeningDurationMs = MINIMUM_OPENING_DURATION_MS,
 }: LandingPageProps): React.ReactElement => {
   const install = usePwaInstall();
   const showInstallCard = install.availability !== "installed";
@@ -54,6 +56,7 @@ export const LandingPage = ({
   const [openingStage, setOpeningStage] = useState(0);
   const [openingFileName, setOpeningFileName] = useState<string>();
   const [largeDocumentPageCount, setLargeDocumentPageCount] = useState<number>();
+  const [isConvertingDocument, setIsConvertingDocument] = useState(false);
   const [isPhoneLayout, setIsPhoneLayout] = useState(
     () => window.matchMedia("(max-width: 767px)").matches,
   );
@@ -102,20 +105,23 @@ export const LandingPage = ({
       setIsDragActive(false);
       setOpeningFileName(file.name);
       setLargeDocumentPageCount(undefined);
+      setIsConvertingDocument(false);
       setOpeningStage(0);
       setIsOpening(true);
       const startedAt = performance.now();
       try {
         const nextSnapshot = await editor.openFile(file, (progress) => {
+          if (progress.phase === "converting-document") {
+            setIsConvertingDocument(true);
+            return;
+          }
+          setIsConvertingDocument(false);
           setLargeDocumentPageCount(progress.pageCount);
           setOpeningStage(3);
         });
         onSnapshotChange(nextSnapshot);
         if (nextSnapshot.state.status !== "ready") return;
-        const remaining = Math.max(
-          0,
-          MINIMUM_OPENING_DURATION_MS - (performance.now() - startedAt),
-        );
+        const remaining = Math.max(0, minimumOpeningDurationMs - (performance.now() - startedAt));
         if (remaining > 0) await sleep(remaining);
         setOpeningStage(3);
         onDocumentOpened();
@@ -123,7 +129,7 @@ export const LandingPage = ({
         setIsOpening(false);
       }
     },
-    [editor, isOpening, onDocumentOpened, onSnapshotChange],
+    [editor, isOpening, minimumOpeningDurationMs, onDocumentOpened, onSnapshotChange],
   );
   useEffect(() => {
     if (replacementFile === undefined) {
@@ -242,7 +248,7 @@ export const LandingPage = ({
           className="visually-hidden"
           disabled={isOpening}
           type="file"
-          accept="application/pdf,.pdf"
+          accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           onChange={handleChange}
         />
         <div
@@ -265,14 +271,18 @@ export const LandingPage = ({
             <span className="file-drop-opening" role="status">
               <span aria-hidden="true" className="landing-loader" />
               <strong>
-                {isPreparingLargeDocument
-                  ? "Preparing large PDF..."
-                  : OPENING_STAGES[visibleOpeningStage]}
+                {isConvertingDocument
+                  ? "Converting your document..."
+                  : isPreparingLargeDocument
+                    ? "Preparing large PDF..."
+                    : OPENING_STAGES[visibleOpeningStage]}
               </strong>
               <span>
-                {isPreparingLargeDocument
-                  ? `This document has ${largeDocumentPageCount.toLocaleString()} pages. NestlyPDF is preparing it for editing.`
-                  : openingFileName}
+                {isConvertingDocument
+                  ? "NestlyPDF is converting this Word document to a PDF in your browser."
+                  : isPreparingLargeDocument
+                    ? `This document has ${largeDocumentPageCount.toLocaleString()} pages. NestlyPDF is preparing it for editing.`
+                    : openingFileName}
               </span>
               <span aria-label={`Opening progress ${openingProgress}`} className="opening-progress">
                 <i style={{ width: openingProgress }} />
@@ -330,10 +340,10 @@ export const LandingPage = ({
         </div>
         {isError ? (
           <div className="landing-error" role="alert">
-            <strong>We could not open that PDF.</strong>
+            <strong>We could not open that file.</strong>
             <span>{snapshot.state.error.message}</span>
             <button type="button" onClick={openPicker}>
-              Try another PDF
+              Try another file
             </button>
           </div>
         ) : null}

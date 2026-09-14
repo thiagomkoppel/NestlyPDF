@@ -4,6 +4,20 @@
 
 The application must assume that every PDF may be malformed or malicious.
 
+## Word documents are untrusted input
+
+`.docx` files are treated as untrusted. Conversion to PDF happens entirely in the
+browser (ADR-006).
+
+- Render converted document content into an inert, hidden, off-viewport container
+  that is never attached to a live interactive region.
+- Do not execute scripts, follow links, or load external resources referenced by
+  the document during conversion.
+- Apply a file size limit before conversion and fail gracefully when exceeded.
+- Remove the scratch container and release the original `.docx` bytes as soon as
+  conversion finishes or fails.
+- Legacy binary `.doc` files are rejected, not parsed.
+
 ## Controls
 
 - Use maintained PDF libraries.

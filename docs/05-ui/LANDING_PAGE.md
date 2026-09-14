@@ -156,6 +156,23 @@ The file-opening operation must start immediately. Animation must never become a
 - keep the editor usable as soon as the PDF is ready;
 - avoid celebratory effects.
 
+## Word document import
+
+The landing page also accepts a single `.docx` file through the same drop zone
+and file picker. The file input `accept` list includes `.pdf` and `.docx`.
+
+- When a `.docx` file is opened, the app converts it to a PDF in the browser
+  before entering the editor (ADR-006).
+- The loading state shows a `Converting your document…` message during
+  conversion, then continues with the normal opening sequence.
+- Legacy binary `.doc` files are rejected on the landing page:
+
+  > Word 97-2003 `.doc` files can't be opened here. Save the file as `.docx` or
+  > PDF and try again.
+
+- Conversion failure keeps the user on the landing page with a concise,
+  non-technical error and a ready-to-retry drop zone.
+
 ### Invalid file
 
 Examples:
@@ -164,7 +181,9 @@ Examples:
 - malformed PDF;
 - unreadable file;
 - multiple files;
-- unsupported encrypted/password-protected PDF.
+- unsupported encrypted/password-protected PDF;
+- legacy `.doc` file;
+- `.docx` file that could not be converted.
 
 Behavior:
 
@@ -259,6 +278,7 @@ Reduced motion:
 Use accurate language:
 
 - `Your PDF stays in this browser session.`
+- `Word documents are converted to PDF in this browser session.`
 - `Nothing is uploaded to NestlyPDF.`
 - `Closing the document or tab may discard your edits.`
 

@@ -33,12 +33,19 @@ const sections = [
     id: "documents-and-editing-data",
     title: "2. Documents and editing data",
     body: (
-      <p>
-        Your PDF, rendered pages, overlay elements, text, images, signatures, initials, and other
-        editing state are processed in your browser memory for the active session. NestlyPDF does
-        not upload PDF contents to a NestlyPDF server or store document contents in a NestlyPDF
-        database.
-      </p>
+      <>
+        <p>
+          Your PDF, rendered pages, overlay elements, text, images, signatures, initials, and other
+          editing state are processed in your browser memory for the active session. NestlyPDF does
+          not upload PDF contents to a NestlyPDF server or store document contents in a NestlyPDF
+          database.
+        </p>
+        <p>
+          If you open a Word (.docx) file, NestlyPDF converts it to a PDF in your browser before
+          editing begins. The Word file is not uploaded, and its data is released once the
+          conversion finishes. Legacy .doc files are not supported.
+        </p>
+      </>
     ),
   },
   {
@@ -214,13 +221,14 @@ export const PrivacyPolicyPage = (): React.ReactElement => (
         <p className="privacy-policy-page__eyebrow">Private PDF workspace</p>
         <h1 id="privacy-policy-title">Privacy Policy</h1>
         <p>Clear, local-first information about how NestlyPDF handles your documents.</p>
-        <p className="privacy-policy-page__updated">Last updated: August 3, 2026</p>
+        <p className="privacy-policy-page__updated">Last updated: August 27, 2026</p>
       </div>
 
       <section className="privacy-policy-page__summary" aria-labelledby="privacy-summary-title">
         <h2 id="privacy-summary-title">Privacy at a glance</h2>
         <ul>
           <li>Your PDF is processed locally in your browser.</li>
+          <li>Word (.docx) files are converted to PDF locally in your browser.</li>
           <li>NestlyPDF does not upload or store your document on its own servers.</li>
           <li>No account is required.</li>
           <li>No analytics or advertising trackers are used.</li>

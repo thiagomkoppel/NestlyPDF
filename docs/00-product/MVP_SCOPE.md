@@ -3,6 +3,7 @@
 ## Included
 
 - Open local PDF.
+- Open local `.docx`, converted to PDF in the browser at import time (ADR-006).
 - Multi-page rendering and thumbnails.
 - Zoom and page navigation.
 - Text boxes.
@@ -33,6 +34,8 @@
 - OCR.
 - Secure redaction.
 - True arbitrary editing of existing PDF text.
+- Legacy binary `.doc` (Word 97-2003) import.
+- Selectable or searchable text in converted Word documents.
 - Password cracking or unauthorized password removal.
 - PSD support.
 - AI-assisted document completion.

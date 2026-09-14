@@ -9,7 +9,7 @@ test("renders the browser-local privacy policy with its complete table of conten
   await expect(page.getByText("Privacy at a glance")).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to NestlyPDF" })).toBeVisible();
   await expect(page.getByRole("link", { name: "15. Contact" })).toBeVisible();
-  await expect(page.getByText("Last updated: August 3, 2026")).toBeVisible();
+  await expect(page.getByText("Last updated: August 27, 2026")).toBeVisible();
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,

@@ -6,7 +6,7 @@ The document is processed locally in the browser and is not uploaded to the appl
 
 ## Data classification
 
-PDF bytes, rendered pages, extracted text, signatures, initials, images, and form values are private document data.
+PDF bytes, imported `.docx` bytes, converted document content, rendered pages, extracted text, signatures, initials, images, and form values are private document data.
 
 ## Rules
 
@@ -17,11 +17,14 @@ PDF bytes, rendered pages, extracted text, signatures, initials, images, and for
 - No private document data is stored in LocalStorage.
 - No document history is maintained.
 - Third-party scripts are prohibited on the editor route unless proven incapable of observing document data and explicitly approved.
+- `.docx` to PDF conversion runs locally; imported bytes and the scratch render container are released when conversion finishes or fails.
 
 ## Accurate wording
 
 Use:
 
 > Your PDF is processed in your browser and is not uploaded to us.
+
+> Word documents are converted to PDF in your browser and are not uploaded to us.
 
 Do not use absolute claims such as “impossible to access,” “military-grade privacy,” or “permanently erased from memory.”

@@ -16,6 +16,7 @@ import {
 } from "../application/editor-application";
 import { BrowserDownloadAdapter } from "../infrastructure/browser/browser-download-adapter";
 import { BrowserLocalPdfFileReader } from "../infrastructure/browser/local-pdf-file-reader";
+import { BrowserDocxToPdfGateway } from "../infrastructure/import/browser-docx-to-pdf-gateway";
 import {
   preflightPdfJsCompatibility,
   type PdfJsCompatibilityResult,
@@ -97,6 +98,8 @@ interface AppProps {
   readonly initialCompatibilityResult?: PdfJsCompatibilityResult;
   /** Explicit test seam; production uses the required five-second minimum. */
   readonly startupMinimumDurationMs?: number;
+  /** Explicit test seam for the minimum landing "opening" animation duration. */
+  readonly openingMinimumDurationMs?: number;
 }
 
 interface NavigationDestination {
@@ -127,6 +130,7 @@ const createEditorServices = (): EditorServices => {
       pdfRenderer,
       undefined,
       new PdfRasterCompressionGateway(),
+      new BrowserDocxToPdfGateway(),
     ),
   };
 };
@@ -189,6 +193,7 @@ const AppContent = ({
   compatibilityProbe = preflightPdfJsCompatibility,
   initialCompatibilityResult,
   startupMinimumDurationMs = STARTUP_MINIMUM_DURATION_MS,
+  openingMinimumDurationMs,
 }: AppProps): React.ReactElement => {
   const pathname = useSyncExternalStore(subscribeToNavigation, getPathname, getServerPathname);
   const { editor, pdfRenderer } = useMemo(() => createEditorServices(), []);
@@ -451,6 +456,9 @@ const AppContent = ({
             onReplacementFileConsumed={() => {
               setReplacementFile(undefined);
             }}
+            {...(openingMinimumDurationMs === undefined
+              ? {}
+              : { minimumOpeningDurationMs: openingMinimumDurationMs })}
             {...(replacementFile === undefined ? {} : { replacementFile })}
           />
         </Shell>,

@@ -182,6 +182,10 @@ Records the decision to use Vite, React, strict TypeScript, and static deploymen
 
 Records the decision to use application-owned, reversible, mergeable command history for Undo/Redo.
 
+### `07-decisions/ADR-006-DOCUMENT-IMPORT-CONVERSION.md`
+
+Records the decision to accept `.docx` files and convert them to PDF entirely in the browser at import time, and to reject legacy `.doc`.
+
 ## Roadmap
 
 ### `08-roadmap/BROWSER_COMPATIBILITY.md`

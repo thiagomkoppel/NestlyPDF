@@ -255,6 +255,11 @@ Do not add:
 
 unless a new approved decision record explicitly changes scope.
 
+In scope by approved decision record:
+
+- `.docx` import via in-browser conversion to PDF (ADR-006). Legacy binary
+  `.doc` remains out of scope.
+
 ## 11. Required workflow for each task
 
 1. Read `README.md`, `PROJECT_STATUS.md`, and `docs/DOCUMENT_INDEX.md`.

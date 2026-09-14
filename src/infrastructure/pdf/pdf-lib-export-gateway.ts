@@ -38,6 +38,26 @@ const visiblePageBox = (page: PDFPage): PageGeometry => {
   return { x: left, y: bottom, width: right - left, height: top - bottom };
 };
 
+/**
+ * The area of a page a reader displays: the crop box clipped to the media box, exactly as
+ * PDF.js resolves it. `getWidth()`/`getHeight()` describe the media box alone, so using them to
+ * place overlays shifts every element on a cropped page — or on one whose media box does not
+ * start at the origin — by the difference between the two top edges.
+ */
+const visiblePageBox = (page: PDFPage): PageGeometry => {
+  const media = page.getMediaBox();
+  const crop = page.getCropBox();
+  const left = Math.max(media.x, crop.x);
+  const bottom = Math.max(media.y, crop.y);
+  const right = Math.min(media.x + media.width, crop.x + crop.width);
+  const top = Math.min(media.y + media.height, crop.y + crop.height);
+  if (right <= left || top <= bottom) {
+    // A crop box that does not overlap the media box is malformed; the media box still renders.
+    return { x: media.x, y: media.y, width: media.width, height: media.height };
+  }
+  return { x: left, y: bottom, width: right - left, height: top - bottom };
+};
+
 const exportFailure = (message: string): PdfExportResult => ({
   ok: false,
   error: { code: "ExportFailed", message },
@@ -141,12 +161,7 @@ const drawCross = (
 export class PdfLibExportGateway implements PdfExportGateway {
   public async open(bytes: Uint8Array): Promise<PdfOpenResult> {
     try {
-      // `updateMetadata` would stamp today's date over the file's own dates before they can be
-      // read, and opening a document must not change what the user sees.
-      const document = await PDFDocument.load(bytes, {
-        ignoreEncryption: false,
-        updateMetadata: false,
-      });
+      const document = await PDFDocument.load(bytes, { ignoreEncryption: false });
       const pages = document.getPages().map<DocumentPage>((page, index) => {
         const view = visiblePageBox(page);
         return {
@@ -156,7 +171,7 @@ export class PdfLibExportGateway implements PdfExportGateway {
           rotation: page.getRotation().angle,
         };
       });
-      return { ok: true, pages, documentDates: readDocumentDates(document) };
+      return { ok: true, pages };
     } catch {
       return openFailure("The PDF could not be opened in the browser.");
     }

@@ -29,11 +29,20 @@ Domain Layer
 Infrastructure Layer
 - PDF.js rendering adapter
 - PDF export adapter
+- Document import adapter (.docx to PDF conversion)
 - Browser file picker adapter
 - Browser download adapter
 - Browser lifecycle adapter
 - Web Worker adapters
 ```
+
+## Document import boundary
+
+Non-PDF sources are converted to PDF before they enter the editor. The
+application defines a `DocumentImportGateway` port; the infrastructure adapter
+converts a `.docx` file to PDF bytes entirely in the browser (see
+`docs/07-decisions/ADR-006-DOCUMENT-IMPORT-CONVERSION.md`). Once converted, the
+session is an ordinary PDF session and no import-specific code runs.
 
 ## Dependency rule
 

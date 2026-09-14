@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   DateProvider,
+  DocumentImportGateway,
+  DocumentImportResult,
   DownloadAdapter,
   DownloadRequest,
   IdGenerator,
@@ -18,6 +20,7 @@ import type {
 } from "./editor-application";
 import {
   classifyDocumentSize,
+  classifyOpenableFile,
   MAX_TEXT_FONT_SIZE,
   MIN_TEXT_FONT_SIZE,
   PdfEditorApplication,
@@ -1973,5 +1976,223 @@ describe("PdfEditorApplication signature and initials overlays", () => {
 
     expect(exportRequests.at(-1)?.elements).toMatchObject([{ id: visible, locked: true }]);
     expect(exportRequests.at(-1)?.elements.map((element) => element.id)).not.toContain(hidden);
+  });
+});
+
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOC_MIME = "application/msword";
+
+describe("classifyOpenableFile", () => {
+  it("classifies PDF files by extension or MIME type", () => {
+    expect(classifyOpenableFile({ name: "contract.pdf", type: "" })).toBe("pdf");
+    expect(classifyOpenableFile({ name: "CONTRACT.PDF", type: "" })).toBe("pdf");
+    expect(classifyOpenableFile({ name: "scan", type: "application/pdf" })).toBe("pdf");
+  });
+
+  it("classifies .docx files by extension or MIME type", () => {
+    expect(classifyOpenableFile({ name: "letter.docx", type: "" })).toBe("docx");
+    expect(classifyOpenableFile({ name: "Letter.DOCX", type: "" })).toBe("docx");
+    expect(classifyOpenableFile({ name: "letter", type: DOCX_MIME })).toBe("docx");
+  });
+
+  it("classifies legacy .doc files by extension or MIME type", () => {
+    expect(classifyOpenableFile({ name: "memo.doc", type: "" })).toBe("legacy-doc");
+    expect(classifyOpenableFile({ name: "memo", type: DOC_MIME })).toBe("legacy-doc");
+  });
+
+  it("prefers the .docx extension even when the MIME type is the legacy Word type", () => {
+    expect(classifyOpenableFile({ name: "letter.docx", type: DOC_MIME })).toBe("docx");
+  });
+
+  it("classifies everything else as unsupported", () => {
+    expect(classifyOpenableFile({ name: "notes.txt", type: "text/plain" })).toBe("unsupported");
+    expect(classifyOpenableFile({ name: "image.png", type: "image/png" })).toBe("unsupported");
+    expect(classifyOpenableFile({ name: "archive", type: "" })).toBe("unsupported");
+  });
+});
+
+describe("PdfEditorApplication document import", () => {
+  const docxFile: LocalPdfFile = {
+    name: "letter.docx",
+    size: 2048,
+    type: DOCX_MIME,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(2048)),
+  };
+  const docFile: LocalPdfFile = {
+    name: "memo.doc",
+    size: 1024,
+    type: DOC_MIME,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(1024)),
+  };
+  const convertedBytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]);
+
+  const buildApplication = (
+    convertToPdf: DocumentImportGateway["convertToPdf"],
+    openPages: PdfOpenResult = {
+      ok: true,
+      pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
+    },
+  ): {
+    application: PdfEditorApplication;
+    openedBytes: Uint8Array[];
+    readSpy: ReturnType<typeof vi.fn>;
+  } => {
+    const openedBytes: Uint8Array[] = [];
+    const readSpy = vi.fn(() =>
+      Promise.resolve<LocalPdfReadResult>({
+        ok: true,
+        fileName: "contract.pdf",
+        bytes: new Uint8Array([37, 80, 68, 70, 45]),
+      }),
+    );
+    const application = new PdfEditorApplication(
+      { read: readSpy },
+      {
+        open: (bytes) => {
+          openedBytes.push(bytes);
+          return Promise.resolve(openPages);
+        },
+        exportPdf: () => Promise.resolve({ ok: true, bytes: new Uint8Array([1]) }),
+      },
+      { download: vi.fn() },
+      new TestIds(),
+      undefined,
+      undefined,
+      undefined,
+      { convertToPdf },
+    );
+    return { application, openedBytes, readSpy };
+  };
+
+  it("converts a .docx file and opens the resulting PDF bytes", async () => {
+    const convertToPdf = vi.fn(() =>
+      Promise.resolve<DocumentImportResult>({
+        ok: true,
+        fileName: "letter.docx",
+        bytes: convertedBytes,
+      }),
+    );
+    const { application, openedBytes, readSpy } = buildApplication(convertToPdf);
+
+    const snapshot = await application.openFile(docxFile);
+
+    expect(convertToPdf).toHaveBeenCalledWith(docxFile);
+    expect(readSpy).not.toHaveBeenCalled();
+    expect(openedBytes[0]).toEqual(convertedBytes);
+    expect(snapshot.state).toMatchObject({
+      status: "ready",
+      fileName: "letter.docx",
+      pageCount: 1,
+    });
+  });
+
+  it("reports a converting-document progress phase before conversion completes", async () => {
+    const phases: string[] = [];
+    const convertToPdf = vi.fn(() =>
+      Promise.resolve<DocumentImportResult>({
+        ok: true,
+        fileName: "letter.docx",
+        bytes: convertedBytes,
+      }),
+    );
+    const { application } = buildApplication(convertToPdf);
+
+    await application.openFile(docxFile, (progress) => {
+      phases.push(progress.phase);
+    });
+
+    expect(phases[0]).toBe("converting-document");
+  });
+
+  it("surfaces conversion failure as a recoverable editor error", async () => {
+    const convertToPdf = vi.fn(() =>
+      Promise.resolve<DocumentImportResult>({
+        ok: false,
+        error: {
+          code: "DocumentConversionFailed",
+          message: "This document could not be converted.",
+        },
+      }),
+    );
+    const { application, openedBytes } = buildApplication(convertToPdf);
+
+    const snapshot = await application.openFile(docxFile);
+
+    expect(snapshot.state.status).toBe("error");
+    expect(snapshot.state.error).toEqual({
+      code: "DocumentConversionFailed",
+      message: "This document could not be converted.",
+    });
+    expect(snapshot.canExport).toBe(false);
+    expect(openedBytes).toHaveLength(0);
+  });
+
+  it("rejects legacy .doc files without invoking the import gateway", async () => {
+    const convertToPdf = vi.fn(() =>
+      Promise.resolve<DocumentImportResult>({
+        ok: true,
+        fileName: "letter.docx",
+        bytes: convertedBytes,
+      }),
+    );
+    const { application } = buildApplication(convertToPdf);
+
+    const snapshot = await application.openFile(docFile);
+
+    expect(convertToPdf).not.toHaveBeenCalled();
+    expect(snapshot.state.status).toBe("error");
+    expect(snapshot.state.error?.code).toBe("UnsupportedDocFormat");
+  });
+
+  it("discards a conversion that finishes after a newer open starts", async () => {
+    const pending = deferred<DocumentImportResult>();
+    const convertToPdf = vi.fn(() => pending.promise);
+    const { application, openedBytes } = buildApplication(convertToPdf);
+
+    const firstOpening = application.openFile(docxFile);
+    await vi.waitFor(() => {
+      expect(convertToPdf).toHaveBeenCalledTimes(1);
+    });
+    const replacementSnapshot = await application.openFile({
+      name: "contract.pdf",
+      size: 5,
+      type: "application/pdf",
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(5)),
+    });
+    pending.resolve({ ok: true, fileName: "letter.docx", bytes: convertedBytes });
+    await firstOpening;
+
+    expect(replacementSnapshot.state).toMatchObject({ status: "ready", fileName: "contract.pdf" });
+    expect(application.snapshot().state.fileName).toBe("contract.pdf");
+    expect(openedBytes.some((bytes) => bytes.length === convertedBytes.length)).toBe(false);
+  });
+
+  it("rejects a .docx file when no import gateway is configured", async () => {
+    const readSpy = vi.fn(() =>
+      Promise.resolve<LocalPdfReadResult>({
+        ok: true,
+        fileName: "contract.pdf",
+        bytes: new Uint8Array([37, 80, 68, 70, 45]),
+      }),
+    );
+    const application = new PdfEditorApplication(
+      { read: readSpy },
+      {
+        open: () =>
+          Promise.resolve<PdfOpenResult>({
+            ok: true,
+            pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
+          }),
+        exportPdf: () => Promise.resolve({ ok: true, bytes: new Uint8Array([1]) }),
+      },
+      { download: vi.fn() },
+      new TestIds(),
+    );
+
+    const snapshot = await application.openFile(docxFile);
+
+    expect(readSpy).not.toHaveBeenCalled();
+    expect(snapshot.state.status).toBe("error");
+    expect(snapshot.state.error?.code).toBe("UnsupportedFile");
   });
 });

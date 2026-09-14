@@ -1,6 +1,6 @@
 Privacy Policy
 
-Last updated: August 3, 2026
+Last updated: August 27, 2026
 
 1. Overview
 
@@ -15,6 +15,8 @@ When you open a PDF in NestlyPDF, the document is processed locally by your web 
 NestlyPDF does not intentionally transmit the contents of your PDF to a NestlyPDF application server. Text, images, signatures, initials, annotations, page operations, and other edits are handled within the browser using local application code.
 
 Your original PDF remains unchanged. NestlyPDF applies edits to an in-browser working session and creates a new PDF when you choose to download the result.
+
+If you open a Word `.docx` file, NestlyPDF converts it to a PDF using local application code in your browser before editing begins. The `.docx` file is not uploaded, and the data from it is released once conversion finishes. Legacy `.doc` files are not supported.
 
 3. Information NestlyPDF does not intentionally collect
 

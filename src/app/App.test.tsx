@@ -42,6 +42,16 @@ const open = vi.fn((): Promise<PdfOpenResult> =>
     pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
   }),
 );
+type MockConvertResult =
+  | { readonly ok: true; readonly fileName: string; readonly bytes: Uint8Array }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } };
+const convertToPdf = vi.fn((): Promise<MockConvertResult> =>
+  Promise.resolve({
+    ok: true,
+    fileName: "letter.docx",
+    bytes: new Uint8Array([37, 80, 68, 70, 45]),
+  }),
+);
 
 vi.mock("../infrastructure/pdf/pdfjs-page-renderer", () => ({
   PdfJsPageRenderer: class PdfJsPageRenderer {
@@ -65,6 +75,12 @@ vi.mock("../infrastructure/pdf/pdf-lib-export-gateway", () => ({
   },
 }));
 
+vi.mock("../infrastructure/import/browser-docx-to-pdf-gateway", () => ({
+  BrowserDocxToPdfGateway: class BrowserDocxToPdfGateway {
+    public convertToPdf = convertToPdf;
+  },
+}));
+
 const compatiblePreflight: PdfJsCompatibilityResult = {
   status: "compatible",
   diagnostics: {
@@ -85,8 +101,8 @@ const renderAt = (
     <App
       compatibilityProbe={compatibilityProbe}
       initialCompatibilityResult={compatiblePreflight}
-
       startupMinimumDurationMs={0}
+      openingMinimumDurationMs={0}
     />,
   );
 };
@@ -101,6 +117,14 @@ const testFile = (bytes: Uint8Array, name: string): File => {
 
 const pdfFile = (name = "contract.pdf"): File =>
   testFile(new Uint8Array([37, 80, 68, 70, 45]), name);
+
+const docxFile = (name = "letter.docx"): File => {
+  const file = testFile(new Uint8Array([80, 75, 3, 4]), name);
+  Object.defineProperty(file, "type", {
+    value: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+  return file;
+};
 
 const clickOverlay = (element: HTMLElement, clientX: number, clientY: number): void => {
   element.dispatchEvent(
@@ -181,6 +205,12 @@ beforeEach(() => {
   disposeRenderDocument.mockClear();
   startRenderPage.mockClear();
   clearCanvas.mockClear();
+  convertToPdf.mockClear();
+  convertToPdf.mockResolvedValue({
+    ok: true,
+    fileName: "letter.docx",
+    bytes: new Uint8Array([37, 80, 68, 70, 45]),
+  });
 });
 
 describe("NestlyPDF application shell", () => {
@@ -244,7 +274,7 @@ describe("NestlyPDF application shell", () => {
     expect(screen.getByText("Your Control")).toBeInTheDocument();
     expect(screen.getByLabelText("Choose a PDF file")).toHaveAttribute(
       "accept",
-      "application/pdf,.pdf",
+      "application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     );
   });
 
@@ -289,7 +319,7 @@ describe("NestlyPDF application shell", () => {
       "mailto:thiagomkoppel@gmail.com",
     );
     expect(screen.getByRole("link", { name: "GitHub page" })).toHaveAttribute("href", GITHUB_URL);
-    expect(screen.getByText("Last updated: August 3, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Last updated: August 27, 2026")).toBeInTheDocument();
   });
 
   it("navigates between the landing page and privacy policy without a full page reload", async () => {
@@ -452,7 +482,80 @@ describe("NestlyPDF application shell", () => {
     });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("That file is not a valid PDF.");
-    expect(screen.getByRole("button", { name: "Try another PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try another file" })).toBeInTheDocument();
+  });
+
+  it("converts a .docx file to PDF and opens the editor", async () => {
+    const user = userEvent.setup();
+    renderAt("/");
+
+    await user.upload(screen.getByLabelText("Choose a PDF file"), docxFile());
+    await screen.findByRole("heading", { name: "letter.docx" }, { timeout: 6_500 });
+
+    expect(convertToPdf).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(new Uint8Array([37, 80, 68, 70, 45]));
+  });
+
+  it("shows a converting-document status while a .docx file is being converted", async () => {
+    let resolveConversion: (result: MockConvertResult) => void = () => {
+      throw new Error("Conversion did not begin.");
+    };
+    convertToPdf.mockImplementationOnce(
+      () =>
+        new Promise<MockConvertResult>((resolve) => {
+          resolveConversion = resolve;
+        }),
+    );
+    renderAt("/");
+
+    fireEvent.change(screen.getByLabelText("Choose a PDF file"), {
+      target: { files: [docxFile()] },
+    });
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Converting your document...");
+
+    act(() => {
+      resolveConversion({
+        ok: true,
+        fileName: "letter.docx",
+        bytes: new Uint8Array([37, 80, 68, 70, 45]),
+      });
+    });
+  });
+
+  it("returns to a retryable landing error when .docx conversion fails", async () => {
+    convertToPdf.mockResolvedValueOnce({
+      ok: false,
+      error: {
+        code: "DocumentConversionFailed",
+        message: "This Word document could not be converted to a PDF.",
+      },
+    });
+    renderAt("/");
+
+    fireEvent.change(screen.getByLabelText("Choose a PDF file"), {
+      target: { files: [docxFile()] },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This Word document could not be converted to a PDF.",
+    );
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("rejects a legacy .doc file without attempting conversion", async () => {
+    renderAt("/");
+
+    const legacyDoc = testFile(new Uint8Array([208, 207, 17, 224]), "memo.doc");
+    Object.defineProperty(legacyDoc, "type", { value: "application/msword" });
+    fireEvent.change(screen.getByLabelText("Choose a PDF file"), {
+      target: { files: [legacyDoc] },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Word 97-2003 .doc files can't be opened here",
+    );
+    expect(convertToPdf).not.toHaveBeenCalled();
   });
 
   it("uses the non-animated opening path when reduced motion is preferred", async () => {

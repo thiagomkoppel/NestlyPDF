@@ -20,6 +20,7 @@ NestlyPDF is designed to keep document processing local.
 - **No cloud document storage**
 - **No account required**
 - **PDF processing happens locally in your browser**
+- **Word `.docx` files are converted to PDF locally in your browser**
 - **Your document stays on your device**
 
 Closing the editor or leaving the session discards the working document from the application. NestlyPDF does not provide cloud document history or synchronization.
@@ -29,6 +30,12 @@ Closing the editor or leaving the session discards the working document from the
 ---
 
 ## ✨ Features
+
+### Opening Documents
+
+- Open a local PDF
+- Open a local Word `.docx` file, converted to PDF in your browser on open
+  (rasterized visual copy; legacy `.doc` is not supported)
 
 ### PDF Editing
 

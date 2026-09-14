@@ -5,9 +5,13 @@
 ### Document opening
 
 - Open a PDF from local storage.
+- Open a `.docx` file from local storage; convert it to PDF in the browser before
+  editing (ADR-006).
 - Support drag-and-drop on desktop.
 - Support file picker on desktop and mobile.
-- Reject unsupported or unreadable files with a clear message.
+- Reject unsupported or unreadable files with a clear message, including legacy
+  `.doc` files.
+- Show a conversion progress state while a `.docx` file is being converted.
 - Never upload the selected file.
 
 ### Editing
