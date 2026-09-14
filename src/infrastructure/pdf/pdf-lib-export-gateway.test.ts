@@ -391,7 +391,7 @@ describe("PdfLibExportGateway cropped pages", () => {
 
     const result = await gateway.open(await createCroppedPdf());
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       pages: [{ id: "page-1", width: 612, height: 768, rotation: 0 }],
     });

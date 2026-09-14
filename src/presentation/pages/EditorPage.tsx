@@ -34,6 +34,7 @@ import {
   validateSignatureImageFile,
 } from "../../application/editor-application";
 import type { SignatureBackgroundRemover } from "../../application/signature-background-remover";
+import { DocumentDatesDialog } from "../components/DocumentDatesDialog";
 import { createCanvasSignatureBackgroundRemover } from "../../infrastructure/browser/canvas-signature-background-remover";
 import type { PdfJsPageRenderer } from "../../infrastructure/pdf/pdfjs-page-renderer";
 import quickPdfMark from "../assets/brand/quickpdf-mark.svg";
