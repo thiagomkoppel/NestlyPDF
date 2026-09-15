@@ -1464,7 +1464,7 @@ body {
 .editor-status-bar {
   grid-row: 4;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto 1fr auto;
   align-items: center;
   gap: 1rem;
   padding: 0 1.25rem;
@@ -1502,6 +1502,26 @@ body {
   background: transparent;
   color: inherit;
   font: inherit;
+}
+.editor-status-bar .status-document-dates {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-self: end;
+  min-height: 1.9rem;
+  border: 1px solid rgb(159 219 218 / 22%);
+  background: #0d2c33;
+}
+.editor-status-bar .status-document-dates .toolbar-icon {
+  width: 1rem;
+  height: 1rem;
+}
+.editor-status-bar .status-document-dates:hover {
+  border-color: rgb(159 219 218 / 45%);
+  background: #113b44;
+}
+.editor-status-bar .status-document-dates:disabled {
+  opacity: 0.55;
 }
 
 .editor-message-strip {
@@ -6544,6 +6564,7 @@ body,
   font-weight: 700;
 }
 .export-dialog input[type="text"],
+.export-dialog input[type="datetime-local"],
 .export-dialog__filename input {
   width: 100%;
   min-height: 3.2rem;
@@ -6638,6 +6659,38 @@ body,
 .export-dialog input:focus-visible {
   outline: 3px solid #ff9a00;
   outline-offset: 2px;
+}
+.document-dates-dialog {
+  width: min(100%, 38rem);
+}
+.document-dates-dialog .export-dialog__icon .toolbar-icon {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+.document-dates-dialog__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.6rem;
+}
+.document-dates-dialog__fields label {
+  display: grid;
+  gap: 0.5rem;
+  color: #b7c7cd;
+  font-weight: 700;
+}
+.document-dates-dialog__note {
+  margin: 1rem 0 0;
+  color: #a9bbc2;
+  font-size: 0.9rem;
+}
+.document-dates-dialog footer > button:first-child {
+  margin-right: auto;
+}
+@media (max-width: 560px) {
+  .document-dates-dialog__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @media (max-width: 767px), (max-height: 767px) and (orientation: landscape) and (pointer: coarse) {
   .export-dialog-backdrop {

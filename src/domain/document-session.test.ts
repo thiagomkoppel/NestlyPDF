@@ -324,4 +324,91 @@ describe("DocumentSession", () => {
       { id: "element-2", visible: true, locked: true },
     ]);
   });
+
+  it("starts with the document dates carried in from the opened file", () => {
+    const session = DocumentSession.create({
+      id: "session-1",
+      pages: [page("page-1")],
+      documentDates: { creationDate: 1_700_000_000_000, modificationDate: 1_700_000_600_000 },
+    });
+
+    expect(session.documentDates).toEqual({
+      creationDate: 1_700_000_000_000,
+      modificationDate: 1_700_000_600_000,
+    });
+    expect(session.isDirty).toBe(false);
+  });
+
+  it("defaults to unknown document dates when the file carried none", () => {
+    const session = DocumentSession.create({ id: "session-1", pages: [page("page-1")] });
+
+    expect(session.documentDates).toEqual({});
+  });
+
+  it("replaces document dates and marks the session dirty", () => {
+    const session = DocumentSession.create({
+      id: "session-1",
+      pages: [page("page-1")],
+      documentDates: { creationDate: 1_700_000_000_000 },
+    });
+
+    expect(
+      session.setDocumentDates({
+        creationDate: 1_500_000_000_000,
+        modificationDate: 1_600_000_000_000,
+      }),
+    ).toEqual({ ok: true });
+    expect(session.documentDates).toEqual({
+      creationDate: 1_500_000_000_000,
+      modificationDate: 1_600_000_000_000,
+    });
+    expect(session.isDirty).toBe(true);
+  });
+
+  it("clears document dates when the replacement omits them", () => {
+    const session = DocumentSession.create({
+      id: "session-1",
+      pages: [page("page-1")],
+      documentDates: { creationDate: 1_700_000_000_000, modificationDate: 1_700_000_600_000 },
+    });
+
+    expect(session.setDocumentDates({})).toEqual({ ok: true });
+    expect(session.documentDates).toEqual({});
+  });
+
+  it("rejects document dates that cannot be represented as a calendar date", () => {
+    const session = DocumentSession.create({ id: "session-1", pages: [page("page-1")] });
+
+    expectDomainError(
+      session.setDocumentDates({ creationDate: Number.NaN }),
+      "InvalidDocumentDate",
+    );
+    expectDomainError(
+      session.setDocumentDates({ modificationDate: 8.64e15 + 1 }),
+      "InvalidDocumentDate",
+    );
+    expect(session.documentDates).toEqual({});
+    expect(session.isDirty).toBe(false);
+  });
+
+  it("rejects document date creation input that cannot be represented as a calendar date", () => {
+    expect(() =>
+      DocumentSession.create({
+        id: "session-1",
+        pages: [page("page-1")],
+        documentDates: { creationDate: Number.POSITIVE_INFINITY },
+      }),
+    ).toThrow("InvalidDocumentDate");
+  });
+
+  it("rejects document date changes on a disposed session", () => {
+    const session = DocumentSession.create({ id: "session-1", pages: [page("page-1")] });
+    session.dispose();
+
+    expectDomainError(
+      session.setDocumentDates({ creationDate: 1_700_000_000_000 }),
+      "SessionDisposed",
+    );
+    expect(session.documentDates).toEqual({});
+  });
 });

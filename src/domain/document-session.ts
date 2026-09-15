@@ -76,11 +76,21 @@ export interface TemporaryPersonalInfo {
   readonly originalFileName?: string;
 }
 
+/**
+ * The document-level PDF dates, as epoch milliseconds so the domain never holds a mutable `Date`.
+ * An absent field means the exporter decides that date.
+ */
+export interface DocumentDates {
+  readonly creationDate?: number;
+  readonly modificationDate?: number;
+}
+
 export interface CreateDocumentSessionRequest {
   readonly id: string;
   readonly pages: readonly DocumentPage[];
   readonly temporaryPersonalInfo?: TemporaryPersonalInfo;
   readonly sourceReference?: string;
+  readonly documentDates?: DocumentDates;
 }
 
 export type DomainErrorCode =
@@ -97,6 +107,7 @@ export type DomainErrorCode =
   | "ElementNotFound"
   | "CannotDeleteLastPage"
   | "InvalidPageOrder"
+  | "InvalidDocumentDate"
   | "SessionDisposed";
 
 export class DomainError extends Error {
@@ -195,6 +206,34 @@ const validateElement = (element: EditorElement): EditorElement => {
   return cloneElement(element);
 };
 
+/** The widest instant `Date` can represent; anything beyond it cannot become a PDF date. */
+const MAX_CALENDAR_DATE_MS = 8.64e15;
+
+const validateDocumentDate = (value: number | undefined, field: string): number | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isFinite(value) || Math.abs(value) > MAX_CALENDAR_DATE_MS) {
+    throw new DomainError(
+      "InvalidDocumentDate",
+      `${field} must be an instant a calendar date can represent.`,
+    );
+  }
+
+  return Math.trunc(value);
+};
+
+const validateDocumentDates = (dates: DocumentDates): DocumentDates => {
+  const creationDate = validateDocumentDate(dates.creationDate, "Creation date");
+  const modificationDate = validateDocumentDate(dates.modificationDate, "Modification date");
+
+  return {
+    ...(creationDate === undefined ? {} : { creationDate }),
+    ...(modificationDate === undefined ? {} : { modificationDate }),
+  };
+};
+
 export class DocumentSession {
   readonly #id: DocumentSessionId;
   #status: DocumentSessionStatus = "ready";
@@ -206,6 +245,7 @@ export class DocumentSession {
   #isDirty = false;
   #temporaryPersonalInfo: TemporaryPersonalInfo;
   #sourceReference: string | undefined;
+  #documentDates: DocumentDates;
 
   private constructor(request: CreateDocumentSessionRequest) {
     this.#id = requireIdentifier<
@@ -213,6 +253,7 @@ export class DocumentSession {
     >(request.id, "InvalidSessionId");
     this.#temporaryPersonalInfo = { ...request.temporaryPersonalInfo };
     this.#sourceReference = request.sourceReference;
+    this.#documentDates = validateDocumentDates(request.documentDates ?? {});
     this.#initializePages(request.pages);
   }
 
@@ -246,6 +287,10 @@ export class DocumentSession {
 
   public get sourceReference(): string | undefined {
     return this.#sourceReference;
+  }
+
+  public get documentDates(): DocumentDates {
+    return { ...this.#documentDates };
   }
 
   public pages(): DocumentPage[] {
@@ -589,6 +634,25 @@ export class DocumentSession {
     return success;
   }
 
+  /** Replaces both dates at once: an omitted field clears that date rather than keeping it. */
+  public setDocumentDates(dates: DocumentDates): DomainResult {
+    const disposed = this.#rejectDisposed();
+    if (disposed !== undefined) {
+      return disposed;
+    }
+
+    try {
+      this.#documentDates = validateDocumentDates(dates);
+      this.#isDirty = true;
+      return success;
+    } catch (error) {
+      if (isDomainError(error)) {
+        return fail(error.code, error.message);
+      }
+      throw error;
+    }
+  }
+
   public markClean(): DomainResult {
     const disposed = this.#rejectDisposed();
     if (disposed !== undefined) {
@@ -608,6 +672,7 @@ export class DocumentSession {
     this.#selectedElementId = undefined;
     this.#temporaryPersonalInfo = {};
     this.#sourceReference = undefined;
+    this.#documentDates = {};
     this.#isDirty = false;
     return success;
   }

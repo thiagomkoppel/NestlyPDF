@@ -33,13 +33,100 @@ describe("PdfLibExportGateway", () => {
 
     const result = await gateway.open(await createPdf());
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       pages: [
         { id: "page-1", width: 300, height: 400, rotation: 0 },
         { id: "page-2", width: 500, height: 700, rotation: 0 },
       ],
     });
+  });
+
+  it("opens the document dates the file was saved with", async () => {
+    const source = await PDFDocument.create();
+    source.addPage([300, 400]);
+    source.setCreationDate(new Date("2019-05-06T07:08:09Z"));
+    source.setModificationDate(new Date("2020-06-07T08:09:10Z"));
+    const gateway = new PdfLibExportGateway();
+
+    const result = await gateway.open(await source.save());
+
+    expect(result).toMatchObject({
+      ok: true,
+      documentDates: {
+        creationDate: Date.parse("2019-05-06T07:08:09Z"),
+        modificationDate: Date.parse("2020-06-07T08:09:10Z"),
+      },
+    });
+  });
+
+  it("stamps the chosen document dates on the exported file", async () => {
+    const gateway = new PdfLibExportGateway();
+
+    const result = await gateway.exportPdf({
+      originalBytes: await createPdf(),
+      pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
+      elements: [textElement("text-1", "page-1", "Dated")],
+      documentDates: {
+        creationDate: Date.parse("2001-02-03T04:05:06Z"),
+        modificationDate: Date.parse("2002-03-04T05:06:07Z"),
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const exported = await PDFDocument.load(result.bytes, { updateMetadata: false });
+    expect(exported.getCreationDate()?.getTime()).toBe(Date.parse("2001-02-03T04:05:06Z"));
+    expect(exported.getModificationDate()?.getTime()).toBe(Date.parse("2002-03-04T05:06:07Z"));
+  });
+
+  it("keeps the source metadata when no dates were chosen", async () => {
+    const source = await PDFDocument.create();
+    source.addPage([300, 400]);
+    source.setCreationDate(new Date("2019-05-06T07:08:09Z"));
+    source.setModificationDate(new Date("2020-06-07T08:09:10Z"));
+    source.setProducer("Original Producer");
+    const gateway = new PdfLibExportGateway();
+
+    const result = await gateway.exportPdf({
+      originalBytes: await source.save(),
+      pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
+      elements: [textElement("text-1", "page-1", "Kept")],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const exported = await PDFDocument.load(result.bytes, { updateMetadata: false });
+    expect(exported.getCreationDate()?.getTime()).toBe(Date.parse("2019-05-06T07:08:09Z"));
+    expect(exported.getModificationDate()?.getTime()).toBe(Date.parse("2020-06-07T08:09:10Z"));
+    expect(exported.getProducer()).toBe("Original Producer");
+  });
+
+  it("keeps the dates the file arrived with when only one of them is chosen", async () => {
+    const source = await PDFDocument.create();
+    source.addPage([300, 400]);
+    source.setCreationDate(new Date("2019-05-06T07:08:09Z"));
+    source.setModificationDate(new Date("2020-06-07T08:09:10Z"));
+    const gateway = new PdfLibExportGateway();
+
+    const result = await gateway.exportPdf({
+      originalBytes: await source.save(),
+      pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
+      elements: [],
+      documentDates: { creationDate: Date.parse("2001-02-03T04:05:06Z") },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const exported = await PDFDocument.load(result.bytes, { updateMetadata: false });
+    expect(exported.getCreationDate()?.getTime()).toBe(Date.parse("2001-02-03T04:05:06Z"));
+    expect(exported.getModificationDate()?.getTime()).toBe(Date.parse("2020-06-07T08:09:10Z"));
   });
 
   it("exports text and whiteout overlays while preserving page count and dimensions", async () => {
@@ -304,7 +391,7 @@ describe("PdfLibExportGateway cropped pages", () => {
 
     const result = await gateway.open(await createCroppedPdf());
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       pages: [{ id: "page-1", width: 612, height: 768, rotation: 0 }],
     });

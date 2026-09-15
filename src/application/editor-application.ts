@@ -2,6 +2,7 @@ import {
   DocumentSession,
   DomainError,
   type Bounds,
+  type DocumentDates,
   type DomainResult,
   type DocumentPage,
   type EditorElement,
@@ -10,6 +11,8 @@ import {
   type SignatureElementContent,
   type TextElementContent,
 } from "../domain/document-session";
+
+export type { DocumentDates } from "../domain/document-session";
 
 export type EditorStatus = "empty" | "loading" | "ready" | "exporting" | "error";
 export type EditorTool =
@@ -163,6 +166,8 @@ export interface LocalPdfFileReader {
 export interface PdfOpenSuccess {
   readonly ok: true;
   readonly pages: readonly DocumentPage[];
+  /** The Info dictionary dates the file arrived with, when the gateway could read them. */
+  readonly documentDates?: DocumentDates;
 }
 
 export interface PdfFailure {
@@ -220,6 +225,8 @@ export interface PdfExportRequest {
   readonly originalBytes: Uint8Array;
   readonly pages: readonly DocumentPage[];
   readonly elements: readonly ExportElement[];
+  /** Dates to stamp on the exported file; an omitted date keeps what the source bytes carry. */
+  readonly documentDates?: DocumentDates;
 }
 
 export interface PdfExportSuccess {
@@ -250,6 +257,8 @@ export interface PdfCompressionGateway {
     readonly bytes: Uint8Array;
     readonly onProgress?: (progress: PdfCompressionProgress) => void;
     readonly signal?: AbortSignal;
+    /** Rebuilding pages drops the Info dictionary, so the chosen dates are re-applied here. */
+    readonly documentDates?: DocumentDates;
   }): Promise<PdfCompressionResult>;
 }
 
@@ -293,6 +302,10 @@ export interface EditorState {
   readonly elements: readonly ExportElement[];
   readonly visibleElements: readonly ExportElement[];
   readonly exportFilename?: string;
+  /** Dates the next export will write; an absent date keeps the one stored in the file. */
+  readonly documentDates: DocumentDates;
+  /** Dates read from the opened file, kept so the date dialog can offer them again. */
+  readonly sourceDocumentDates: DocumentDates;
   readonly error?: EditorError;
 }
 
@@ -356,6 +369,8 @@ const emptyState = (): EditorState => ({
   isDirty: false,
   elements: [],
   visibleElements: [],
+  documentDates: {},
+  sourceDocumentDates: {},
 });
 
 const cloneBytes = (bytes: Uint8Array): Uint8Array => new Uint8Array(bytes);
@@ -652,6 +667,9 @@ export class PdfEditorApplication {
   #cleanRevision = 0;
   #clipboard: ClipboardElement | undefined;
   #openSequence = 0;
+  #sourceDocumentDates: DocumentDates = {};
+  /** Date choices live outside the command history, so dirty state tracks them separately. */
+  #hasUnsavedDocumentDates = false;
 
   public constructor(
     fileReader: LocalPdfFileReader,
@@ -692,6 +710,8 @@ export class PdfEditorApplication {
     this.#disposeRenderDocument();
     this.#session = undefined;
     this.#originalBytes = undefined;
+    this.#sourceDocumentDates = {};
+    this.#hasUnsavedDocumentDates = false;
     this.#resetHistory();
     this.#clearClipboard();
     const {
@@ -800,11 +820,13 @@ export class PdfEditorApplication {
     }
     this.#originalBytes = originalBytes;
     this.#resetHistory();
+    this.#sourceDocumentDates = { ...openResult.documentDates };
     this.#session = DocumentSession.create({
       id: this.#idGenerator.nextId("session"),
       pages: openResult.pages,
       temporaryPersonalInfo: { originalFileName: fileName },
       sourceReference: this.#idGenerator.nextId("source"),
+      documentDates: this.#sourceDocumentDates,
     });
     this.#resetHistory();
     this.#syncState({ fileName, status: "ready" });
@@ -816,6 +838,8 @@ export class PdfEditorApplication {
     this.#disposeRenderDocument();
     this.#session = undefined;
     this.#originalBytes = undefined;
+    this.#sourceDocumentDates = {};
+    this.#hasUnsavedDocumentDates = false;
     this.#resetHistory();
     this.#clearClipboard();
     this.#state = emptyState();
@@ -1389,6 +1413,24 @@ export class PdfEditorApplication {
     this.#syncState();
     return this.snapshot();
   }
+  /**
+   * Chooses the Info dictionary dates the next export writes. Both dates are replaced at once:
+   * an omitted date is not carried over, and leaves that date as the source file stores it.
+   */
+  public setDocumentDates(dates: DocumentDates): EditorSnapshot {
+    const session = this.#session;
+    if (session === undefined) {
+      return this.#operationError("NoActiveDocument", "Open a PDF before changing its dates.");
+    }
+    const result = session.setDocumentDates(dates);
+    if (!result.ok) {
+      return this.#operationError("OperationRejected", result.error.message);
+    }
+    this.#hasUnsavedDocumentDates = true;
+    this.#syncState();
+    return this.snapshot();
+  }
+
   public async exportCurrentPdf(options: PdfExportOptions = {}): Promise<EditorSnapshot> {
     const session = this.#session;
     const originalBytes = this.#originalBytes;
@@ -1400,10 +1442,12 @@ export class PdfEditorApplication {
     const { error: discardedExportError, ...exportingState } = this.#state;
     void discardedExportError;
     this.#state = { ...exportingState, status: "exporting" };
+    const documentDates = session.documentDates;
     const exportResult = await this.#pdfGateway.exportPdf({
       originalBytes,
       pages: session.pages(),
       elements: this.#orderedExportElements(),
+      documentDates,
     });
     if (!exportResult.ok) {
       this.#state = { ...before, error: exportResult.error };
@@ -1425,6 +1469,7 @@ export class PdfEditorApplication {
       }
       const compressed = await this.#compressionGateway.compress({
         bytes: exportResult.bytes,
+        documentDates,
         ...(options.onCompressionProgress === undefined
           ? {}
           : { onProgress: options.onCompressionProgress }),
@@ -1469,6 +1514,7 @@ export class PdfEditorApplication {
     }
 
     session.markClean();
+    this.#hasUnsavedDocumentDates = false;
     this.#cleanRevision = this.#currentRevision;
     this.#syncState({ status: "ready", exportFilename: filename });
     return this.snapshot();
@@ -1912,11 +1958,13 @@ export class PdfEditorApplication {
       pages,
       currentPageNumber: currentPageIndex + 1,
       tool: this.#state.tool,
-      isDirty: this.#currentRevision !== this.#cleanRevision,
+      isDirty: this.#currentRevision !== this.#cleanRevision || this.#hasUnsavedDocumentDates,
       elements,
       visibleElements: elements.filter(
         (element) => element.pageId === session.currentPageId && (element.visible ?? true),
       ),
+      documentDates: session.documentDates,
+      sourceDocumentDates: { ...this.#sourceDocumentDates },
       ...(originalFileName === undefined ? {} : { fileName: originalFileName }),
       ...(currentPage === undefined ? {} : { currentPage }),
       ...(this.#renderDocumentId === undefined ? {} : { renderDocumentId: this.#renderDocumentId }),

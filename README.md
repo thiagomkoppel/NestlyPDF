@@ -77,6 +77,9 @@ NestlyPDF supports:
 
 - Original-quality export
 - Compressed export
+- Choosing the created and modified dates stored inside the exported PDF (desktop only, from the **PDF dates** button in the editor status bar)
+
+Exporting keeps the document information the opened file already carried. A date you do not change stays exactly as it was.
 
 ---
 

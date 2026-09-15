@@ -19,6 +19,8 @@ const emptySnapshot: EditorSnapshot = {
     isDirty: false,
     elements: [],
     visibleElements: [],
+    documentDates: {},
+    sourceDocumentDates: {},
   },
   canUndo: false,
   canRedo: false,

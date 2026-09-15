@@ -65,6 +65,7 @@ interface TestEditor extends PdfEditorApplication {
   readonly setAllCurrentPageElementsLocked: Mock;
   readonly setElementVisibility: Mock;
   readonly setElementLocked: Mock;
+  readonly setDocumentDates: Mock;
 }
 
 const documentPages = [
@@ -85,6 +86,8 @@ const baseSnapshot = (overrides: Partial<EditorState> = {}): EditorSnapshot => {
     isDirty: false,
     elements: [],
     visibleElements: [],
+    documentDates: {},
+    sourceDocumentDates: {},
   };
   const state: EditorState = {
     ...baseState,
@@ -209,6 +212,7 @@ const createEditor = (): TestEditor =>
     setAllCurrentPageElementsLocked: vi.fn(() => baseSnapshot()),
     setElementVisibility: vi.fn(() => baseSnapshot()),
     setElementLocked: vi.fn(() => baseSnapshot()),
+    setDocumentDates: vi.fn(() => baseSnapshot()),
     addUploadedSignature: vi.fn(() => baseSnapshot()),
     addTypedInitials: vi.fn(() => baseSnapshot()),
     addDrawnInitials: vi.fn(() => baseSnapshot()),
@@ -1201,6 +1205,8 @@ describe("EditorPage PDF rendering", () => {
             isDirty: false,
             elements: [],
             visibleElements: [],
+            documentDates: {},
+            sourceDocumentDates: {},
           },
         }}
         onSnapshotChange={vi.fn()}
@@ -4325,6 +4331,93 @@ describe("EditorPage PDF rendering", () => {
     expect(screen.getByRole("button", { name: "Cross" })).toBeVisible();
     expect(container.querySelector(".desktop-inspector-content")).not.toHaveAttribute("hidden");
     expect(screen.getByRole("tablist", { name: "Text inspector sections" })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+  it("edits the PDF dates from the desktop status bar", async () => {
+    const user = userEvent.setup();
+    const editor = createEditor();
+    const { container } = render(
+      <EditorPage
+        editor={editor}
+        snapshot={baseSnapshot({
+          documentDates: { creationDate: new Date(2019, 4, 6, 7, 8).getTime() },
+          sourceDocumentDates: { creationDate: new Date(2019, 4, 6, 7, 8).getTime() },
+        })}
+        onSnapshotChange={vi.fn()}
+        pdfRenderer={createRenderer()}
+      />,
+    );
+
+    const statusBar = container.querySelector(".editor-status-bar");
+    const openDates = screen.getByRole("button", { name: "Edit PDF dates" });
+    expect(statusBar?.contains(openDates)).toBe(true);
+
+    await user.click(openDates);
+    const dialog = screen.getByRole("dialog", { name: "PDF dates" });
+    expect(within(dialog).getByLabelText("Created")).toHaveValue("2019-05-06T07:08");
+
+    const modified = within(dialog).getByLabelText("Modified");
+    fireEvent.change(modified, { target: { value: "2002-03-04T05:06" } });
+    await user.click(within(dialog).getByRole("button", { name: "Apply dates" }));
+
+    expect(editor.setDocumentDates).toHaveBeenCalledWith({
+      creationDate: new Date(2019, 4, 6, 7, 8).getTime(),
+      modificationDate: new Date(2002, 2, 4, 5, 6).getTime(),
+    });
+    expect(screen.queryByRole("dialog", { name: "PDF dates" })).not.toBeInTheDocument();
+  });
+
+  it("closes the PDF dates dialog without changing the document", async () => {
+    const user = userEvent.setup();
+    const editor = createEditor();
+    render(
+      <EditorPage
+        editor={editor}
+        snapshot={baseSnapshot()}
+        onSnapshotChange={vi.fn()}
+        pdfRenderer={createRenderer()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit PDF dates" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(editor.setDocumentDates).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "PDF dates" })).not.toBeInTheDocument();
+  });
+
+  it("offers no PDF dates to edit while no document is open", () => {
+    const snapshot = baseSnapshot();
+    render(
+      <EditorPage
+        editor={createEditor()}
+        snapshot={{ ...snapshot, canExport: false, state: { ...snapshot.state, status: "empty" } }}
+        onSnapshotChange={vi.fn()}
+        pdfRenderer={createRenderer()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Edit PDF dates" })).toBeDisabled();
+  });
+
+  it("keeps the PDF dates tool off touch layouts", () => {
+    const mediaQuery = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => mediaQuery),
+    );
+
+    render(
+      <EditorPage
+        editor={createEditor()}
+        snapshot={baseSnapshot()}
+        onSnapshotChange={vi.fn()}
+        pdfRenderer={createRenderer()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Edit PDF dates" })).not.toBeInTheDocument();
+
     vi.unstubAllGlobals();
   });
 });
