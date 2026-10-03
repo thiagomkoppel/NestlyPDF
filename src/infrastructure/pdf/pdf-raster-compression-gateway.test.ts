@@ -81,7 +81,7 @@ describe("PdfRasterCompressionGateway", () => {
     const fixture = createDocumentFixture(2);
     pdfjsMock.getDocument.mockReturnValueOnce(fixture.loadingTask);
     const gateway = new PdfRasterCompressionGateway();
-    const progress: { currentPage: number; totalPages: number }[] = [];
+    const progress: { currentPage: number; totalPages: number; unit?: string }[] = [];
 
     const result = await gateway.compress({
       bytes: new Uint8Array([37, 80, 68, 70]),
@@ -91,8 +91,8 @@ describe("PdfRasterCompressionGateway", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(progress).toEqual([
-      { currentPage: 1, totalPages: 2 },
-      { currentPage: 2, totalPages: 2 },
+      { currentPage: 1, totalPages: 2, unit: "page" },
+      { currentPage: 2, totalPages: 2, unit: "page" },
     ]);
     expect(pageAt(fixture.pages, 0).page.cleanup).toHaveBeenCalledTimes(1);
     expect(pageAt(fixture.pages, 1).page.cleanup).toHaveBeenCalledTimes(1);

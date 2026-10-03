@@ -243,9 +243,17 @@ export interface PdfExportGateway {
 
 export type PdfExportMode = "original" | "compressed";
 
+/**
+ * How hard compression works. `balanced` and `strong` keep a real PDF (selectable text, vectors,
+ * forms); `maximum` may flatten pages into images when that is what makes the file smallest.
+ */
+export type PdfCompressionLevel = "balanced" | "strong" | "maximum";
+
 export interface PdfCompressionProgress {
   readonly currentPage: number;
   readonly totalPages: number;
+  /** What is being counted; pages when absent. */
+  readonly unit?: "page" | "image";
 }
 
 export type PdfCompressionResult =
@@ -255,6 +263,7 @@ export type PdfCompressionResult =
 export interface PdfCompressionGateway {
   compress(request: {
     readonly bytes: Uint8Array;
+    readonly level?: PdfCompressionLevel;
     readonly onProgress?: (progress: PdfCompressionProgress) => void;
     readonly signal?: AbortSignal;
     /** Rebuilding pages drops the Info dictionary, so the chosen dates are re-applied here. */
@@ -264,6 +273,7 @@ export interface PdfCompressionGateway {
 
 export interface PdfExportOptions {
   readonly mode?: PdfExportMode;
+  readonly compressionLevel?: PdfCompressionLevel;
   readonly filename?: string;
   readonly onCompressionProgress?: (progress: PdfCompressionProgress) => void;
   readonly signal?: AbortSignal;
@@ -1469,6 +1479,7 @@ export class PdfEditorApplication {
       }
       const compressed = await this.#compressionGateway.compress({
         bytes: exportResult.bytes,
+        level: options.compressionLevel ?? "balanced",
         documentDates,
         ...(options.onCompressionProgress === undefined
           ? {}
@@ -1491,7 +1502,7 @@ export class PdfEditorApplication {
           error: {
             code: "CompressionNotBeneficial",
             message:
-              "Compression didn't reduce this PDF. Export the original-quality version instead.",
+              "This PDF is already well optimized at this level. Try a stronger level or export the original.",
           },
         };
         return this.snapshot();

@@ -239,6 +239,29 @@ describe("PdfLibExportGateway", () => {
     embedFont.mockRestore();
     drawText.mockRestore();
   });
+  it("embeds only the Patrick Hand glyphs that were typed", async () => {
+    const embedFont = vi.spyOn(PDFDocument.prototype, "embedFont");
+    const gateway = new PdfLibExportGateway();
+
+    const result = await gateway.exportPdf({
+      originalBytes: await createPdf(),
+      pages: [{ id: "page-1", width: 300, height: 400, rotation: 0 }],
+      elements: [
+        {
+          ...textElement("patrick-subset", "page-1", "Ok"),
+          textAppearance: { fontSize: 22, color: "#000000", fontFamily: "Patrick Hand" },
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const customFontCall = embedFont.mock.calls.find(([value]) => value instanceof Uint8Array);
+    expect(customFontCall?.[1]).toMatchObject({ subset: true });
+    // The full font file is ~215 KB; a two-glyph subset keeps the export far below that.
+    expect(result.bytes.byteLength).toBeLessThan(40_000);
+    embedFont.mockRestore();
+  });
   it("fails safely for invalid PDF bytes", async () => {
     const result = await new PdfLibExportGateway().exportPdf({
       originalBytes: new Uint8Array([1, 2, 3]),

@@ -33,7 +33,8 @@ Implemented proof-of-concept behavior:
 - export the current PDF with text, whiteout, signature, initials, image, checkmark, cross, and date overlays embedded;
 - preserve original page count, page dimensions, page order, and untouched content during export;
 - download the edited PDF through a browser adapter using a temporary object URL;
-- offer Original Size export plus optional browser-local compressed export, which rasterizes the final edited pages sequentially and refuses output that is not smaller;
+- offer Original Size export plus optional browser-local compressed export with three levels; Balanced and Strong keep a real PDF (selectable text, vectors, forms) while resampling oversized images to 150/110 DPI of their drawn size, re-encoding photos, Flate-compressing raw streams, merging duplicate streams and dropping unreachable objects and private application data; Maximum also tries flattening pages to images and keeps whichever is smaller; output that is not smaller is refused;
+- subset the bundled Patrick Hand font on export so only the typed glyphs are embedded;
 - choose the created and modified dates stored inside the downloaded PDF through a desktop-only PDF dates tool in the editor status bar; exporting no longer rewrites the Info dictionary with today's date or a pdf-lib producer, so an untouched date stays exactly as the opened file carried it;
 - keep the editor session open after successful download;
 - mark the current session clean after successful download;

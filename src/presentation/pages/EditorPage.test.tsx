@@ -4251,6 +4251,34 @@ describe("EditorPage PDF rendering", () => {
       expect.objectContaining({ mode: "original" }),
     );
   });
+  it("offers compression levels only for compressed export and sends the chosen one", async () => {
+    const user = userEvent.setup();
+    const editor = createEditor();
+    const exportCurrentPdf = (editor as unknown as { readonly exportCurrentPdf: Mock })
+      .exportCurrentPdf;
+    exportCurrentPdf.mockResolvedValueOnce(baseSnapshot());
+
+    render(
+      <EditorPage
+        editor={editor}
+        snapshot={baseSnapshot()}
+        onSnapshotChange={vi.fn()}
+        pdfRenderer={createRenderer()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Download" }));
+    expect(screen.queryByRole("group", { name: "Compression level" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /Compress PDF/ }));
+    const levels = screen.getByRole("group", { name: "Compression level" });
+    expect(within(levels).getByRole("radio", { name: /Balanced/ })).toBeChecked();
+    await user.click(within(levels).getByRole("radio", { name: /Strong/ }));
+    await user.click(screen.getByRole("button", { name: "Export PDF" }));
+
+    expect(exportCurrentPdf).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "compressed", compressionLevel: "strong" }),
+    );
+  });
   it("closes the export dialog after a successful compressed export", async () => {
     const user = userEvent.setup();
     const editor = createEditor();

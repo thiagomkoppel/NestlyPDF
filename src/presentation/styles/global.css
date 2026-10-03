@@ -6618,6 +6618,33 @@ body,
   font-style: normal;
   text-transform: uppercase;
 }
+.export-dialog__levels {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: -0.4rem;
+}
+.export-dialog__levels legend {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+}
+.export-dialog fieldset.export-dialog__levels label {
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+  padding: 0.7rem;
+}
+.export-dialog__levels strong {
+  font-size: 0.92rem;
+}
+.export-dialog__levels small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+}
+@media (max-width: 560px) {
+  .export-dialog__levels {
+    grid-template-columns: 1fr;
+  }
+}
 .export-dialog__privacy {
   margin: 1.4rem 0 0;
   padding-left: 2.8rem;
