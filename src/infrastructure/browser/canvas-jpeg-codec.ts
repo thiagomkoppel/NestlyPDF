@@ -93,12 +93,30 @@ const toRgba = (pixels: RasterPixels): Uint8ClampedArray<ArrayBuffer> => {
   return rgba;
 };
 
+/**
+ * FileReader rather than `Blob.arrayBuffer()`: it is available in every supported browser and
+ * worker, and in the jsdom test environment, whose Blob has no `arrayBuffer()`.
+ */
+const blobBytes = (blob: Blob): Promise<Uint8Array> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { result } = reader;
+      if (result instanceof ArrayBuffer) resolve(new Uint8Array(result));
+      else reject(new Error("The JPEG could not be read."));
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("The JPEG could not be read."));
+    };
+    reader.readAsArrayBuffer(blob);
+  });
+
 const encode = async (canvas: JpegCanvas, quality: number): Promise<EncodedJpeg | undefined> => {
   const blob = await canvas.toJpeg(quality);
   // A browser without a JPEG encoder silently falls back to PNG, which a PDF cannot embed as DCT.
   if (blob?.type !== "image/jpeg") return undefined;
   // Canvas encoders always write three-component (YCbCr) JPEGs.
-  return { bytes: new Uint8Array(await blob.arrayBuffer()), components: 3 };
+  return { bytes: await blobBytes(blob), components: 3 };
 };
 
 /** JPEG encoding through the browser's own canvas encoder. Nothing leaves the device. */
