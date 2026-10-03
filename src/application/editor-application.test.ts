@@ -553,6 +553,28 @@ describe("PdfEditorApplication export", () => {
     );
   });
 
+  it("asks for balanced compression unless another level is chosen", async () => {
+    const compress = vi.fn(() =>
+      Promise.resolve({ ok: true as const, bytes: new Uint8Array([1, 2]) }),
+    );
+    app = new PdfEditorApplication(
+      reader,
+      gateway,
+      downloader,
+      new TestIds(),
+      undefined,
+      undefined,
+      { compress },
+    );
+    await app.openFile(file);
+
+    await app.exportCurrentPdf({ mode: "compressed" });
+    await app.exportCurrentPdf({ mode: "compressed", compressionLevel: "maximum" });
+
+    expect(compress).toHaveBeenNthCalledWith(1, expect.objectContaining({ level: "balanced" }));
+    expect(compress).toHaveBeenNthCalledWith(2, expect.objectContaining({ level: "maximum" }));
+  });
+
   it("downloads compressed final export bytes only when compression reduces the file", async () => {
     const compress = vi.fn(() =>
       Promise.resolve({ ok: true as const, bytes: new Uint8Array([1, 2]) }),

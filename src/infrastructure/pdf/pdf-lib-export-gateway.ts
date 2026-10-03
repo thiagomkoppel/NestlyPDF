@@ -178,7 +178,8 @@ export class PdfLibExportGateway implements PdfExportGateway {
       const patrickHand = usesPatrickHand
         ? await (async (): Promise<PDFFont> => {
             document.registerFontkit(fontkit);
-            return document.embedFont(patrickHandFontBytes());
+            // Subsetting keeps only the glyphs actually typed: ~7 KB instead of ~90 KB per file.
+            return document.embedFont(patrickHandFontBytes(), { subset: true });
           })()
         : undefined;
       for (const element of request.elements) {

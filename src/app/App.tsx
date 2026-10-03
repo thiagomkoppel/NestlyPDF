@@ -23,7 +23,9 @@ import {
 } from "../infrastructure/browser/browser-compatibility";
 import { PdfJsPageRenderer } from "../infrastructure/pdf/pdfjs-page-renderer";
 import { PdfLibExportGateway } from "../infrastructure/pdf/pdf-lib-export-gateway";
+import { CanvasJpegCodec } from "../infrastructure/browser/canvas-jpeg-codec";
 import { PdfRasterCompressionGateway } from "../infrastructure/pdf/pdf-raster-compression-gateway";
+import { PdfSmartCompressionGateway } from "../infrastructure/pdf/pdf-smart-compression-gateway";
 import { LeaveWithoutSavingDialog } from "../presentation/components/LeaveWithoutSavingDialog";
 import { Shell } from "../presentation/components/Shell";
 import { PwaInstallProvider } from "../presentation/components/use-pwa-install";
@@ -129,7 +131,11 @@ const createEditorServices = (): EditorServices => {
       new SequentialIdGenerator(),
       pdfRenderer,
       undefined,
-      new PdfRasterCompressionGateway(),
+      new PdfSmartCompressionGateway(
+        new CanvasJpegCodec(),
+        // Only used by the Maximum level, and only kept when it beats the structured result.
+        new PdfRasterCompressionGateway({ dpi: 120, jpegQuality: 0.65 }),
+      ),
       new BrowserDocxToPdfGateway(),
     ),
   };

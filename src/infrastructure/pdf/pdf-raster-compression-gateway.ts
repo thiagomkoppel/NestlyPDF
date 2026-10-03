@@ -39,8 +39,21 @@ const releaseCanvas = (canvas: HTMLCanvasElement): void => {
   canvas.height = 0;
 };
 
+export interface RasterCompressionSettings {
+  readonly dpi: number;
+  readonly jpegQuality: number;
+}
+
 /** Raster compression deliberately flattens final edited pages, one page at a time. */
 export class PdfRasterCompressionGateway implements PdfCompressionGateway {
+  readonly #settings: RasterCompressionSettings;
+
+  public constructor(
+    settings: RasterCompressionSettings = { dpi: TARGET_DPI, jpegQuality: JPEG_QUALITY },
+  ) {
+    this.#settings = settings;
+  }
+
   public async compress(request: {
     readonly bytes: Uint8Array;
     readonly onProgress?: (progress: PdfCompressionProgress) => void;
@@ -58,7 +71,7 @@ export class PdfRasterCompressionGateway implements PdfCompressionGateway {
       });
       renderedDocument = await loadingTask.promise;
       const compressed = await PDFDocument.create();
-      const scale = TARGET_DPI / PDF_POINTS_PER_INCH;
+      const scale = this.#settings.dpi / PDF_POINTS_PER_INCH;
 
       for (let index = 1; index <= renderedDocument.numPages; index += 1) {
         if (request.signal?.aborted) return cancelled();
@@ -101,7 +114,9 @@ export class PdfRasterCompressionGateway implements PdfCompressionGateway {
           releaseCanvas(canvas);
           return cancelled();
         }
-        const imageBytes = bytesFromDataUrl(canvas.toDataURL("image/jpeg", JPEG_QUALITY));
+        const imageBytes = bytesFromDataUrl(
+          canvas.toDataURL("image/jpeg", this.#settings.jpegQuality),
+        );
         const image = await compressed.embedJpg(imageBytes);
         const outputPage = compressed.addPage([naturalViewport.width, naturalViewport.height]);
         outputPage.drawImage(image, {
@@ -112,7 +127,11 @@ export class PdfRasterCompressionGateway implements PdfCompressionGateway {
         });
         sourcePage.cleanup();
         releaseCanvas(canvas);
-        request.onProgress?.({ currentPage: index, totalPages: renderedDocument.numPages });
+        request.onProgress?.({
+          currentPage: index,
+          totalPages: renderedDocument.numPages,
+          unit: "page",
+        });
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       }
       // The rebuilt document starts with pdf-lib's own Info dictionary, so the chosen dates have

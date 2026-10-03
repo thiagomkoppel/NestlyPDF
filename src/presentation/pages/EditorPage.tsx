@@ -14,6 +14,7 @@ import type {
   DocumentDates,
   EditorSnapshot,
   PdfEditorApplication,
+  PdfCompressionLevel,
   PdfCompressionProgress,
   PdfExportMode,
   ExportElement,
@@ -1012,6 +1013,7 @@ export const EditorPage = ({
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMode, setExportMode] = useState<PdfExportMode>("original");
+  const [compressionLevel, setCompressionLevel] = useState<PdfCompressionLevel>("balanced");
   const [exportFilename, setExportFilename] = useState("");
   const [compressionProgress, setCompressionProgress] = useState<
     PdfCompressionProgress | undefined
@@ -2384,6 +2386,7 @@ export const EditorPage = ({
     try {
       const nextSnapshot = await editor.exportCurrentPdf({
         mode: exportMode,
+        compressionLevel,
         filename: exportFilename,
         signal: abortController.signal,
         onCompressionProgress: setCompressionProgress,
@@ -4064,11 +4067,13 @@ export const EditorPage = ({
         <ExportPdfDialog
           filename={exportFilename}
           mode={exportMode}
+          compressionLevel={compressionLevel}
           isExporting={isExporting}
           progress={compressionProgress}
           error={state.error?.code === "CompressionNotBeneficial" ? state.error.message : undefined}
           onFilenameChange={setExportFilename}
           onModeChange={setExportMode}
+          onCompressionLevelChange={setCompressionLevel}
           onCancel={cancelExport}
           onExport={() => void exportPdf()}
         />
@@ -4091,23 +4096,55 @@ export const EditorPage = ({
 interface ExportPdfDialogProps {
   readonly filename: string;
   readonly mode: PdfExportMode;
+  readonly compressionLevel: PdfCompressionLevel;
   readonly isExporting: boolean;
   readonly progress: PdfCompressionProgress | undefined;
   readonly error: string | undefined;
   readonly onFilenameChange: (filename: string) => void;
   readonly onModeChange: (mode: PdfExportMode) => void;
+  readonly onCompressionLevelChange: (level: PdfCompressionLevel) => void;
   readonly onCancel: () => void;
   readonly onExport: () => void;
 }
 
+const COMPRESSION_LEVEL_OPTIONS: readonly {
+  readonly level: PdfCompressionLevel;
+  readonly title: string;
+  readonly description: string;
+}[] = [
+  {
+    level: "balanced",
+    title: "Balanced",
+    description: "Images at 150 DPI. Sharp on screen and on paper.",
+  },
+  {
+    level: "strong",
+    title: "Strong",
+    description: "Images at 110 DPI with stronger JPEG. Best for email and uploads.",
+  },
+  {
+    level: "maximum",
+    title: "Maximum",
+    description: "Smallest possible file. Pages may be flattened into images.",
+  },
+];
+
+const compressionProgressLabel = (progress: PdfCompressionProgress | undefined): string => {
+  if (progress === undefined) return "Preparing compression...";
+  const position = `${String(progress.currentPage)} of ${String(progress.totalPages)}`;
+  return progress.unit === "image" ? `Optimizing image ${position}` : `Page ${position}`;
+};
+
 const ExportPdfDialog = ({
   filename,
   mode,
+  compressionLevel,
   isExporting,
   progress,
   error,
   onFilenameChange,
   onModeChange,
+  onCompressionLevelChange,
   onCancel,
   onExport,
 }: ExportPdfDialogProps): React.ReactElement => {
@@ -4157,11 +4194,7 @@ const ExportPdfDialog = ({
         {isCompressing ? (
           <section aria-live="polite" className="export-dialog__progress">
             <strong>Compressing PDF...</strong>
-            <span>
-              {progress === undefined
-                ? "Preparing compression..."
-                : `Page ${String(progress.currentPage)} of ${String(progress.totalPages)}`}
-            </span>
+            <span>{compressionProgressLabel(progress)}</span>
             <progress max={progress?.totalPages ?? 1} value={progress?.currentPage ?? 0} />
             <p>Your document remains on this device.</p>
           </section>
@@ -4211,11 +4244,36 @@ const ExportPdfDialog = ({
                     Compress PDF <em>Recommended</em>
                   </strong>
                   <small>
-                    Smaller file. Text and page content may be flattened into page images.
+                    Smaller file. Images are resized and re-encoded; text stays selectable.
                   </small>
                 </span>
               </label>
             </fieldset>
+            {mode === "compressed" ? (
+              <fieldset className="export-dialog__levels">
+                <legend>Compression level</legend>
+                {COMPRESSION_LEVEL_OPTIONS.map((option) => (
+                  <label
+                    className={compressionLevel === option.level ? "is-selected" : ""}
+                    key={option.level}
+                  >
+                    <input
+                      checked={compressionLevel === option.level}
+                      name="compression-level"
+                      type="radio"
+                      value={option.level}
+                      onChange={() => {
+                        onCompressionLevelChange(option.level);
+                      }}
+                    />
+                    <span>
+                      <strong>{option.title}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            ) : null}
             {error === undefined ? null : (
               <p className="error-message" role="alert">
                 {error}
