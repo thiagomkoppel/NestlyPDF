@@ -1,0 +1,25 @@
+# NestlyPDF is a static, client-side app: nothing here is private, but there is nothing for crawlers to index in the editor.
+User-agent: *
+Allow: /
+
+# Opt out of AI training crawlers.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /

@@ -116,6 +116,10 @@ Identifies relevant threats and mitigations for a browser-only PDF editing appli
 
 Defines session creation, dirty-state warnings, replacement, disposal, and unload behavior.
 
+### `04-security/HTTP_SECURITY_HEADERS.md`
+
+Explains the Cloudflare `_headers` policy (CSP, referrer, framing, permissions), how it was verified, and what to set in the Cloudflare dashboard instead.
+
 ## UI
 
 ### `05-ui/ACCESSIBILITY.md`
